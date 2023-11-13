@@ -102,6 +102,116 @@ NeuralN_preds <-tibble(id =ggg_test$id,
 vroom_write(x=NeuralN_preds, file="./NN_Preds.csv", delim=",")
 
 
+#############
+#Boosted Trees
+
+install.packages("lightgbm")
+library(bonsai)
+library(lightgbm)
+
+boost_model <- boost_tree(tree_depth = tune(), 
+                          trees = tune(),
+                           learn_rate= tune()) %>% 
+  set_engine("lightgbm") %>% 
+  set_mode("classification")
+
+boost_wf <-workflow() %>% 
+  add_recipe(My_Recipe) %>% 
+  add_model(boost_model)
+folds <- vfold_cv(ggg_train, v = 10, repeats = 1)
+
+boost_tuneGrid<- grid_regular(tree_depth(),
+                           trees(),
+                           learn_rate(),
+                           levels =10 )
+
+tuned_boost <- boost_wf %>% 
+  tune_grid(resamples = folds, 
+            grid =boost_tuneGrid, 
+            metrics= metric_set(accuracy))
+
+bestTune <- tuned_boost %>% select_best("accuracy")
+
+final_wf <- boost_wf %>% 
+  finalize_workflow(bestTune) %>% 
+  fit(data = ggg_train)
+
+Boost_preds <-final_wf %>% 
+  predict(new_data = ggg_test, type = "class")
+
+Boosted_preds <-tibble(id =ggg_test$id,
+                       type = Boost_preds$.pred_class)
+
+vroom_write(x=Boosted_preds, file="./Boosted_Preds.csv", delim=",")
+
+#Naive Bayes
+
+My_Recipe <- recipe(type~., data = ggg_train) %>%
+  step_other(all_nominal_predictors(), threshold = .001) %>% 
+  step_lencode_glm(all_nominal_predictors(), outcome = vars(type))
+
+
+nb_model <- naive_Bayes(Laplace = tune(), 
+                        smoothness = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("naivebayes")
+
+nb_wf <- workflow() %>% 
+  add_recipe(My_Recipe) %>% 
+  add_model(nb_model)
+
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness())
+
+folds <- vfold_cv(ggg_train, v= 5, repeats = 1)
+
+
+CV_results <- nb_wf %>% 
+  tune_grid(resamples=folds,
+            grid=tuning_grid,
+            metrics=metric_set(accuracy))
+
+bestTune <- CV_results %>% 
+  select_best("accuracy")
+
+final_wf <- nb_wf %>% finalize_workflow(bestTune) %>% 
+  fit(data = ggg_train)
+
+NB_preds <- final_wf %>% 
+  predict(new_data = ggg_test, type = "class")
+
+Naive_preds <- tibble(id =ggg_test$id,
+                      type = NB_preds$.pred_class)
+vroom_write(x=Naive_preds, file="./NBPreds.csv", delim=",")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
